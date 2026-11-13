@@ -1,0 +1,12 @@
+name: temple-status-shiny-app
+title: temple-status-shiny-app
+username: dodaac
+account: dodaac
+server: connect.posit.cloud
+hostUrl: https://api.connect.posit.cloud/v1
+appId: 01a1d560-c955-5dd1-eb5c-2cc4578ac356
+bundleId:
+url: https://connect.posit.cloud/dodaac/content/01a1d560-c955-5dd1-eb5c-2cc4578ac356
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

@@ -35,8 +35,12 @@ read_temples <- function(file) {
     Status = vapply(parts, `[`, "", 2),
     Latitude = as.numeric(vapply(parts, `[`, "", 3)),
     Longitude = as.numeric(vapply(parts, `[`, "", 4)),
+    Address = vapply(parts, \(p) paste(p[seq(7, length(p) - 6)], collapse = ","), ""),
     City = vapply(parts, \(p) p[length(p) - 5], ""),
-    Country = vapply(parts, \(p) p[length(p) - 1], "")
+    State = vapply(parts, \(p) p[length(p) - 3], ""),
+    Postal = vapply(parts, \(p) p[length(p) - 2], ""),
+    Country = vapply(parts, \(p) p[length(p) - 1], ""),
+    Phone = vapply(parts, \(p) p[length(p)], "")
   )
 }
 
@@ -73,10 +77,11 @@ status_colors <- setNames(
 )
 countries <- sort(unique(temple_map$Country))
 
-# Custom SVG pins: a pin in the status color (same as the legend and badges) with a
-# white Font Awesome glyph. Returned as data URIs so no image files are needed.
-status_glyphs <- c(Dedicated = "check", `Under Construction` = "wrench",
-                   Announced = "flag")
+status_glyphs <- c(
+  Dedicated = "circle-check",
+  `Under Construction` = "person-digging",
+  Announced = "bullhorn"
+)
 
 make_pin <- function(color, glyph) {
   fa_svg <- as.character(fontawesome::fa(glyph))
@@ -107,7 +112,23 @@ basemaps <- list(
 )
 
 temple_popup <- function(df) {
-  paste0("<b>", df$Temple, "</b><br>", df$Status, "<br>", df$City, ", ", df$Country)
+  esc <- htmltools::htmlEscape
+  vapply(seq_len(nrow(df)), function(i) {
+    r <- df[i, ]
+    # City, state and postal code on one line; drop blank parts
+    locality <- paste(Filter(nzchar, c(r$City, r$State, r$Postal)), collapse = ", ")
+    lines <- c(
+      paste0("<b>", esc(r$Temple), "</b>"),
+      esc(r$Status),
+      if (nzchar(r$Address)) esc(r$Address),
+      if (nzchar(locality)) esc(locality),
+      if (nzchar(r$Country)) esc(r$Country),
+      if (nzchar(r$Phone)) {
+        sprintf('<a href="tel:%s">%s</a>', gsub("[^0-9+]", "", r$Phone), esc(r$Phone))
+      }
+    )
+    paste(lines, collapse = "<br>")
+  }, "")
 }
 
 # ---- UI --------------------------------------------------------------------
@@ -132,7 +153,7 @@ ui <- page_sidebar(
     checkboxGroupInput(
       "status", "Temple status",
       choices = names(status_colors),
-      selected = c("Dedicated", "Under Construction")
+      selected = names(status_colors)
     ),
     selectizeInput(
       "country", "Country",
@@ -221,13 +242,30 @@ server <- function(input, output, session) {
   })
 
   output$table <- renderDT({
-      datatable(rownames = FALSE, filter = "top", selection = "single",
-                # Responsive collapses low-priority columns on narrow screens
-                extensions = "Responsive",
-                options = list(pageLength = 15, search = list(regex = FALSE),
-                               responsive = TRUE))
-      datatable(rownames = FALSE, filter = "top", selection = "single",
-                options = list(pageLength = 15, search = list(regex = FALSE)))
+    filtered() |>
+      select(Temple, Status, City, State, Country, Phone, Latitude, Longitude) |>
+      # Phone becomes a tel: link (escaped by hand; other columns stay escaped by DT)
+      mutate(Phone = ifelse(
+        nzchar(Phone),
+        sprintf('<a href="tel:%s">%s</a>', gsub("[^0-9+]", "", Phone),
+                htmltools::htmlEscape(Phone)),
+        ""
+      )) |>
+      datatable(
+        rownames = FALSE, filter = "top", selection = "single",
+        escape = setdiff(c("Temple", "Status", "City", "State", "Country",
+                           "Latitude", "Longitude"), "Phone"),
+        # Responsive collapses low-priority columns on narrow screens;
+        # Buttons provides the column visibility menu
+        extensions = c("Responsive", "Buttons"),
+        options = list(
+          pageLength = 15, search = list(regex = FALSE), responsive = TRUE,
+          dom = "Bfrtip",
+          buttons = list(list(extend = "colvis", text = "Columns")),
+          # State and Phone (0-based: 3, 5) are hidden until chosen
+          columnDefs = list(list(visible = FALSE, targets = c(3, 5)))
+        )
+      )
   })
 
   # Clicking a table row switches to the map and zooms to that temple. The zoom
