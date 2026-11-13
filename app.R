@@ -114,6 +114,18 @@ temple_popup <- function(df) {
 ui <- page_sidebar(
   title = "LDS Temples",
   theme = app_theme,
+  fillable = TRUE,
+  tags$head(tags$style(HTML("
+    /* Keeps the map usable when the page is short, e.g. phones in landscape */
+    #map { min-height: 400px; }
+    @media (max-width: 575.98px) {
+      .badge { font-size: .8rem !important; }
+      .leaflet-control.legend { font-size: 11px; line-height: 1.2; padding: 4px 6px; }
+      .dataTables_wrapper { font-size: .85rem; }
+      /* Hide the per-column filter row (its cells are td; header cells are th) */
+      .dataTables_wrapper thead tr:has(> td) { display: none; }
+    }
+  "))),
   sidebar = sidebar(
     input_dark_mode(id = "dark_mode"),
     radioButtons("basemap", "Basemap", choices = names(basemaps), selected = "Light"),
@@ -135,7 +147,7 @@ ui <- page_sidebar(
   ),
   # Compact status counts
   div(
-    class = "d-flex flex-wrap gap-2 mb-2",
+    class = "d-flex flex-wrap gap-1 gap-sm-2 mb-2",
     span(class = "badge text-bg-success fs-6 fw-normal",
          "Dedicated: ", textOutput("n_dedicated", inline = TRUE)),
     span(class = "badge text-bg-warning fs-6 fw-normal",
@@ -146,7 +158,7 @@ ui <- page_sidebar(
   navset_card_underline(
     id = "tabs",
     full_screen = TRUE,
-    nav_panel("Map", leafletOutput("map")),
+    nav_panel("Map", leafletOutput("map", height = "100%")),
     nav_panel("Table", DTOutput("table"))
   )
 )
@@ -209,8 +221,11 @@ server <- function(input, output, session) {
   })
 
   output$table <- renderDT({
-    filtered() |>
-      select(Temple, Status, City, Country, Latitude, Longitude) |>
+      datatable(rownames = FALSE, filter = "top", selection = "single",
+                # Responsive collapses low-priority columns on narrow screens
+                extensions = "Responsive",
+                options = list(pageLength = 15, search = list(regex = FALSE),
+                               responsive = TRUE))
       datatable(rownames = FALSE, filter = "top", selection = "single",
                 options = list(pageLength = 15, search = list(regex = FALSE)))
   })
